@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket for storing news audio files
+Resources:
+  NewsAudioBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: newsapp-audio-bucket-<unique-suffix>
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+Outputs:
+  NewsAudioBucketName:
+    Description: Name of the S3 bucket for audio files
+    Value: !Ref NewsAudioBucket
+# Replace <unique-suffix> with a globally unique string (e.g., your project or account ID).
+# This bucket is private and versioned for safety.
+# Adjust permissions as needed for your use case (e.g., allow read access via signed URLs). 
