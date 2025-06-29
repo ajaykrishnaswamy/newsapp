@@ -26,7 +26,16 @@ Resources:
           import requests
 
           def lambda_handler(event, context):
-              # Example: Call GROQ API (endpoint and payload are placeholders)
+              if event.get('httpMethod', '') == 'OPTIONS':
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type'
+                      },
+                      'body': ''
+                  }
               api_key = os.environ.get('GROQ_API_KEY')
               url = 'https://api.groq.com/v1/some-endpoint'  # Replace with actual endpoint
               headers = {'Authorization': f'Bearer {api_key}'}
@@ -35,6 +44,11 @@ Resources:
               result = response.json()
               return {
                   'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type'
+                  },
                   'body': json.dumps({'groq_result': result})
               }
 
@@ -56,7 +70,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub '${NewsAudioBucket.Arn}/*'
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${NewsAudioBucket.Arn}/*'
+                  - !GetAtt NewsAudioBucket.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -82,12 +100,23 @@ Resources:
           import boto3
 
           def lambda_handler(event, context):
+              if event.get('httpMethod', '') == 'OPTIONS':
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                          'Access-Control-Allow-Headers': 'Content-Type'
+                      },
+                      'body': ''
+                  }
               s3 = boto3.client('s3')
               bucket = os.environ['BUCKET_NAME']
               response = s3.list_objects_v2(Bucket=bucket)
               files = []
               for obj in response.get('Contents', []):
                   key = obj['Key']
+                  # ExpiresIn is in seconds (3600 = 1 hour)
                   url = s3.generate_presigned_url(
                       'get_object',
                       Params={'Bucket': bucket, 'Key': key},
@@ -96,6 +125,11 @@ Resources:
                   files.append({'key': key, 'url': url})
               return {
                   'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type'
+                  },
                   'body': json.dumps(files)
               }
 
@@ -166,6 +200,34 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${NewsApi}/*/GET/list
+
+  NewsApiListOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref NewsApi
+      ResourceId: !Ref NewsApiListResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: "Empty"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
 Outputs:
   ApiEndpoint:
