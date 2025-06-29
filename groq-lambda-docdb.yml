@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: News App Audio Pipeline (API Gateway -> Lambda -> S3)
+
+Resources:
+
+  NewsAudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'newsapp-audio-bucket-${AWS::AccountId}'
+
+  NewsAppFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: NewsAppAudioGenerator
+      Handler: index.lambda_handler
+      Runtime: python3.11
+      Role: !GetAtt NewsAppRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref NewsAudioBucket
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import requests
+
+          def lambda_handler(event, context):
+              # Example: Call GROQ API (endpoint and payload are placeholders)
+              api_key = os.environ.get('GROQ_API_KEY')
+              url = 'https://api.groq.com/v1/some-endpoint'  # Replace with actual endpoint
+              headers = {'Authorization': f'Bearer {api_key}'}
+              payload = {'input': 'Generate news audio summary'}
+              response = requests.post(url, headers=headers, json=payload)
+              result = response.json()
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'groq_result': result})
+              }
+
+  NewsAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: NewsAppPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub '${NewsAudioBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  NewsAppListFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: NewsAppAudioList
+      Handler: index.lambda_handler
+      Runtime: python3.11
+      Role: !GetAtt NewsAppRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref NewsAudioBucket
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              s3 = boto3.client('s3')
+              bucket = os.environ['BUCKET_NAME']
+              response = s3.list_objects_v2(Bucket=bucket)
+              files = []
+              for obj in response.get('Contents', []):
+                  key = obj['Key']
+                  url = s3.generate_presigned_url(
+                      'get_object',
+                      Params={'Bucket': bucket, 'Key': key},
+                      ExpiresIn=3600
+                  )
+                  files.append({'key': key, 'url': url})
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(files)
+              }
+
+  NewsApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: NewsApi
+
+  NewsApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt NewsApi.RootResourceId
+      PathPart: audio
+      RestApiId: !Ref NewsApi
+
+  NewsApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref NewsApi
+      ResourceId: !Ref NewsApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: 
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NewsAppFunction.Arn}/invocations
+
+  NewsApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: NewsApiMethod
+    Properties:
+      RestApiId: !Ref NewsApi
+      StageName: prod
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NewsAppFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${NewsApi}/*/POST/audio
+
+  NewsApiListResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt NewsApi.RootResourceId
+      PathPart: list
+      RestApiId: !Ref NewsApi
+
+  NewsApiListMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref NewsApi
+      ResourceId: !Ref NewsApiListResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NewsAppListFunction.Arn}/invocations
+
+  LambdaListInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NewsAppListFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${NewsApi}/*/GET/list
+
+Outputs:
+  ApiEndpoint:
+    Description: "POST endpoint for news audio generation"
+    Value: !Sub "https://${NewsApi}.execute-api.${AWS::Region}.amazonaws.com/prod/audio"
+  NewsAudioBucket:
+    Description: "S3 bucket for news audio files"
+    Value: !Ref NewsAudioBucket

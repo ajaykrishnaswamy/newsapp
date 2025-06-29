@@ -77,3 +77,8 @@ Outputs:
 - Replace `<unique-suffix>` with a globally unique string (e.g., your project or account ID).
 - This bucket is private and versioned for safety.
 - Adjust permissions as needed for your use case (e.g., allow read access via signed URLs).
+
+
+
+another idea: create an agentic ai video editor that can just edit videos right from the command line
+

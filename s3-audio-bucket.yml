@@ -4,7 +4,7 @@ Resources:
   NewsAudioBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: newsapp-audio-bucket-<unique-suffix>
+      BucketName: newsapp-audio-bucket-thatha
       AccessControl: Private
       VersioningConfiguration:
         Status: Enabled
