@@ -8,7 +8,7 @@ NewsApp is a serverless application that fetches, summarizes, and generates audi
 ## System Design: AWS Architecture
 
 ```mermaid
-graph TD;
+graph TD
   A[User (Web UI)] --> B[API Gateway]
   B --> C[Lambda: NewsAppAudioList]
   C --> D[S3: NewsAudioBucket]
