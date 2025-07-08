@@ -9,15 +9,15 @@ NewsApp is a serverless application that fetches, summarizes, and generates audi
 
 ```mermaid
 graph TD;
-  A[User (Web UI)] -->|GET /audio/list| B(API Gateway)
-  B -->|Lambda Proxy| C[Lambda: NewsAppAudioList]
-  C -->|List & Sign URLs| D[S3: NewsAudioBucket]
+  A[User (Web UI)] --> B[API Gateway]
+  B --> C[Lambda: NewsAppAudioList]
+  C --> D[S3: NewsAudioBucket]
   C --> E[Return signed URLs]
   E --> A
 
   subgraph News Generation
-    F[Lambda: NewsAppAudioGenerator] -->|GROQ API| G[GROQ]
-    F -->|PutObject| D
+    F[Lambda: NewsAppAudioGenerator] --> G[GROQ]
+    F --> D
   end
 ```
 
